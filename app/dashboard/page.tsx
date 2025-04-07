@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSession, useUser } from '@clerk/nextjs'
+import { useUser, useSession } from '@clerk/nextjs'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY! // または ANON_KEY を使っていればそれ
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY!
 
 export default function Dashboard() {
   const { isLoaded, user } = useUser()
@@ -14,52 +14,49 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  // ClerkのトークンでSupabaseクライアントを作成（公式スタイル）
-  function createClerkSupabaseClient() {
-    return createClient(supabaseUrl, supabaseKey, {
-      async accessToken() {
-        return session?.getToken() ?? null
-      },
-    })
-  }
+  // Clerkのトークンを渡してSupabaseクライアントを生成（公式推奨方式）
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    async accessToken() {
+      return session?.getToken() ?? null
+    },
+  })
 
-  const client = createClerkSupabaseClient()
-
-  // タスクの取得
+  // ユーザーのタスクを取得
   useEffect(() => {
     if (!isLoaded || !user) return
 
-    const fetchTasks = async () => {
+    const loadTasks = async () => {
       setLoading(true)
-      const { data, error } = await client
+      const { data, error } = await supabase
         .from('tasks')
         .select()
-        .eq('user_id', user!.id) // user_id の一致で RLS を通過
-      if (!error) {
-        setTasks(data || [])
+        .eq('user_id', user.id)
+
+      if (error) {
+        console.error('読み込みエラー:', error)
       } else {
-        console.error('タスク取得エラー:', error)
+        setTasks(data || [])
       }
       setLoading(false)
     }
 
-    fetchTasks()
+    loadTasks()
   }, [isLoaded, user])
 
-  // タスクの作成（RLSに必要なuser_idを明示）
+  // タスクを追加（RLS対応のため user_id を含める）
   const handleCreateTask = async () => {
     if (!user) return
 
-    const { error } = await client.from('tasks').insert({
+    const { error } = await supabase.from('tasks').insert({
       name: 'New Task',
-      user_id: user.id, // 🔐 RLSに対応（auth.jwt() ->> 'sub' = user_id）
+      user_id: user.id,
     })
 
     if (error) {
-      console.error('タスク作成エラー:', error)
+      console.error('作成エラー:', error)
     } else {
       // 作成後に再取得
-      const { data } = await client
+      const { data } = await supabase
         .from('tasks')
         .select()
         .eq('user_id', user.id)
@@ -67,25 +64,28 @@ export default function Dashboard() {
     }
   }
 
-  // 認証が読み込まれるまで何も表示しない
   if (!isLoaded) {
     return <p>Loading user...</p>
   }
 
   return (
-    <div className="p-6">
+    <div className="p-6 min-h-screen bg-white text-gray-900">
+      <div className="flex justify-end mb-6">
+        {/* ユーザーメニューはレイアウトで追加してもOK */}
+      </div>
+
       <h1 className="text-2xl font-bold mb-4">Tasks</h1>
 
       {loading ? (
         <p>Loading tasks...</p>
       ) : tasks.length > 0 ? (
-        <ul className="list-disc list-inside mb-4">
+        <ul className="list-disc list-inside mb-6">
           {tasks.map((task) => (
             <li key={task.id}>{task.name}</li>
           ))}
         </ul>
       ) : (
-        <p>No tasks found</p>
+        <p className="mb-6">No tasks found</p>
       )}
 
       <button
