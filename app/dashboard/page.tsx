@@ -1,11 +1,11 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth, useUser, useSession, UserButton } from '@clerk/nextjs'
 import { createClient } from '@supabase/supabase-js'
+
+export const dynamic = 'force-dynamic'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -20,6 +20,21 @@ export default function Dashboard() {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(true)
 
+  // ✅ Clerk公式推奨のSupabaseクライアント
+  function createClerkSupabaseClient() {
+    return createClient(
+      supabaseUrl,
+      supabaseAnonKey,
+      {
+        async accessToken() {
+          return session?.getToken({ template: 'supabase' }) ?? null
+        },
+      }
+    )
+  }
+
+  const client = createClerkSupabaseClient()
+
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
       router.push('/signin')
@@ -27,93 +42,69 @@ export default function Dashboard() {
   }, [isLoaded, isSignedIn, router])
 
   useEffect(() => {
-    if (!user || !session) return
+    if (!user) return
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${await session.getToken({ template: 'supabase' })}`,
-        },
-      },
-    })
-
-    const fetchTasks = async () => {
-      const { data, error } = await supabase
+    async function loadTasks() {
+      setLoading(true)
+      const { data, error } = await client
         .from('tasks')
         .select('*')
         .eq('user_id', user.id)
 
       if (!error) setTasks(data || [])
       else console.error('読み込みエラー:', error)
+
       setLoading(false)
     }
 
-    fetchTasks()
-  }, [user, session])
+    loadTasks()
+  }, [user])
 
-  const createTask = async (e: React.FormEvent<HTMLFormElement>) => {
+  async function createTask(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (!user || !session) return
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${await session.getToken({ template: 'supabase' })}`,
-        },
-      },
-    })
-
-    const { error } = await supabase.from('tasks').insert({
+    await client.from('tasks').insert({
       name,
-      user_id: user.id,
+      user_id: user?.id,
     })
 
-    if (error) {
-      console.error('追加エラー:', error)
-    } else {
-      setName('')
-      window.location.reload() // 簡単にリロードして反映
-    }
+    setName('')
+    window.location.reload()
   }
 
-  if (!isLoaded) {
-    return null
-  }
+  if (!isLoaded) return null
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      {/* ヘッダー（ユーザーメニュー） */}
       <div className="flex justify-end mb-6">
         <UserButton afterSignOutUrl="/signin" />
       </div>
 
-      {/* タスク一覧 */}
-      <h1 className="text-2xl font-bold mb-4">タスク一覧</h1>
+      <h1 className="text-xl font-bold mb-4">タスク一覧</h1>
 
       {loading ? (
         <p>読み込み中...</p>
       ) : tasks.length === 0 ? (
-        <p>タスクがありません</p>
+        <p>タスクはありません</p>
       ) : (
-        <ul className="list-disc list-inside mb-6">
+        <ul className="list-disc list-inside mb-4">
           {tasks.map((task) => (
             <li key={task.id}>{task.name}</li>
           ))}
         </ul>
       )}
 
-      {/* タスク追加フォーム */}
       <form onSubmit={createTask} className="flex gap-2">
         <input
           type="text"
           placeholder="新しいタスクを入力"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="border border-gray-300 p-2 rounded w-full"
+          className="border px-2 py-1 rounded w-full"
         />
         <button
           type="submit"
-          className="bg-blue-500 text-white px-4 py-2 rounded"
+          className="bg-blue-500 text-white px-4 py-1 rounded"
         >
           追加
         </button>
