@@ -1,4 +1,5 @@
 'use client'
+
 import { useEffect, useState } from 'react'
 import { useSession, useUser } from '@clerk/nextjs'
 import { createClient } from '@supabase/supabase-js'
@@ -6,14 +7,11 @@ import { createClient } from '@supabase/supabase-js'
 export default function Home() {
   const [tasks, setTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [name, setName] = useState('')
-  // The `useUser()` hook is used to ensure that Clerk has loaded data about the signed in user
+
   const { user } = useUser()
-  // The `useSession()` hook is used to get the Clerk session object
-  // The session object is used to get the Clerk session token
   const { session } = useSession()
 
-  // Create a custom Supabase client that injects the Clerk session token into the request headers
+  // Clerkのトークンを含むSupabaseクライアントを作成
   function createClerkSupabaseClient() {
     return createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,54 +24,69 @@ export default function Home() {
     )
   }
 
-  // Create a `client` object for accessing Supabase data using the Clerk token
   const client = createClerkSupabaseClient()
 
-  // This `useEffect` will wait for the User object to be loaded before requesting
-  // the tasks for the signed in user
+  // タスク一覧を取得
   useEffect(() => {
     if (!user) return
 
     async function loadTasks() {
       setLoading(true)
-      const { data, error } = await client.from('tasks').select()
-      if (!error) setTasks(data)
+      const { data, error } = await client
+        .from('tasks')
+        .select()
+        .eq('user_id', user.id) // 自分のタスクだけ取得
+      if (!error) setTasks(data || [])
       setLoading(false)
     }
 
     loadTasks()
   }, [user])
 
-  async function createTask(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    // Insert task into the "tasks" database
-    await client.from('tasks').insert({
-      name,
+  // タスク作成処理
+  async function handleCreateTask() {
+    if (!user) return
+
+    const { error } = await client.from('tasks').insert({
+      name: 'New Task',
+      user_id: user.id,
     })
-    window.location.reload()
+
+    if (error) {
+      console.error('タスク作成エラー:', error)
+    } else {
+      // 成功したら一覧更新
+      const { data } = await client
+        .from('tasks')
+        .select()
+        .eq('user_id', user.id)
+      setTasks(data || [])
+    }
   }
 
   return (
-    <div>
-      <h1>Tasks</h1>
+    <div className="p-4">
+      <h1 className="text-2xl font-bold mb-4">Tasks</h1>
 
-      {loading && <p>Loading...</p>}
+      {loading ? (
+        <p>Loading...</p>
+      ) : tasks.length === 0 ? (
+        <p>No tasks found</p>
+      ) : (
+        <ul className="list-disc list-inside mb-4">
+          {tasks.map((task) => (
+            <li key={task.id}>{task.name}</li>
+          ))}
+        </ul>
+      )}
 
-      {!loading && tasks.length > 0 && tasks.map((task: any) => <p key={task.id}>{task.name}</p>)}
-
-      {!loading && tasks.length === 0 && <p>No tasks found</p>}
-
-      <form onSubmit={createTask}>
-        <input
-          autoFocus
-          type="text"
-          name="name"
-          placeholder="Enter new task"
-          onChange={(e) => setName(e.target.value)}
-          value={name}
-        />
-        <button type="submit">Add</button>
-      </form>
+      {/* ✅ 「task作成」ボタン */}
+      <button
+        onClick={handleCreateTask}
+        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+      >
+        task作成
+      </button>
     </div>
   )
 }
