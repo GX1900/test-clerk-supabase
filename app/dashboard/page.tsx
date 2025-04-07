@@ -4,23 +4,26 @@ import { useEffect, useState } from 'react'
 import { useSession, useUser } from '@clerk/nextjs'
 import { createClient } from '@supabase/supabase-js'
 
-export default function Home() {
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY! // or _ANON_KEY depending on your setup
+
+export default function Dashboard() {
   const [tasks, setTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const { user } = useUser()
   const { session } = useSession()
 
-  // Clerkのトークンを含むSupabaseクライアントを作成
+  // Clerk公式推奨：accessToken() を使ってSupabaseクライアントを作成
   function createClerkSupabaseClient() {
     return createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_KEY!,
+      supabaseUrl,
+      supabaseKey,
       {
         async accessToken() {
           return session?.getToken() ?? null
         },
-      },
+      }
     )
   }
 
@@ -35,15 +38,21 @@ export default function Home() {
       const { data, error } = await client
         .from('tasks')
         .select()
-        .eq('user_id', user.id) // 自分のタスクだけ取得
-      if (!error) setTasks(data || [])
+        .eq('user_id', user.id)
+
+      if (!error) {
+        setTasks(data || [])
+      } else {
+        console.error('タスク取得エラー:', error)
+      }
+
       setLoading(false)
     }
 
     loadTasks()
   }, [user])
 
-  // タスク作成処理
+  // タスク作成（仮の名前 "New Task" を使用）
   async function handleCreateTask() {
     if (!user) return
 
@@ -55,7 +64,7 @@ export default function Home() {
     if (error) {
       console.error('タスク作成エラー:', error)
     } else {
-      // 成功したら一覧更新
+      // 作成後にタスクを再取得
       const { data } = await client
         .from('tasks')
         .select()
@@ -80,7 +89,7 @@ export default function Home() {
         </ul>
       )}
 
-      {/* ✅ 「task作成」ボタン */}
+      {/* 「task作成」ボタン */}
       <button
         onClick={handleCreateTask}
         className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
