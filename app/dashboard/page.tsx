@@ -5,60 +5,54 @@ import { useSession, useUser } from '@clerk/nextjs'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_KEY! // または ANON_KEY を使っていればそれ
 
 export default function Dashboard() {
-  const { user } = useUser()
+  const { isLoaded, user } = useUser()
   const { session } = useSession()
 
   const [tasks, setTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Clerk公式準拠：accessToken() により Supabase クライアント作成
+  // ClerkのトークンでSupabaseクライアントを作成（公式スタイル）
   function createClerkSupabaseClient() {
-    return createClient(
-      supabaseUrl,
-      supabaseKey,
-      {
-        async accessToken() {
-          return session?.getToken() ?? null
-        },
-      }
-    )
+    return createClient(supabaseUrl, supabaseKey, {
+      async accessToken() {
+        return session?.getToken() ?? null
+      },
+    })
   }
 
   const client = createClerkSupabaseClient()
 
-  // タスク取得処理
+  // タスクの取得
   useEffect(() => {
-    if (!user) return
+    if (!isLoaded || !user) return
 
-    const loadTasks = async () => {
+    const fetchTasks = async () => {
       setLoading(true)
       const { data, error } = await client
         .from('tasks')
         .select()
-        .eq('user_id', user!.id) // 🔥 非null断言（userがnullでないと確信）
-
+        .eq('user_id', user!.id) // user_id の一致で RLS を通過
       if (!error) {
         setTasks(data || [])
       } else {
         console.error('タスク取得エラー:', error)
       }
-
       setLoading(false)
     }
 
-    loadTasks()
-  }, [user])
+    fetchTasks()
+  }, [isLoaded, user])
 
-  // タスク追加処理
+  // タスクの作成（RLSに必要なuser_idを明示）
   const handleCreateTask = async () => {
     if (!user) return
 
     const { error } = await client.from('tasks').insert({
       name: 'New Task',
-      user_id: user!.id, // 🔥 非null断言（安全に追加）
+      user_id: user.id, // 🔐 RLSに対応（auth.jwt() ->> 'sub' = user_id）
     })
 
     if (error) {
@@ -68,9 +62,14 @@ export default function Dashboard() {
       const { data } = await client
         .from('tasks')
         .select()
-        .eq('user_id', user!.id)
+        .eq('user_id', user.id)
       setTasks(data || [])
     }
+  }
+
+  // 認証が読み込まれるまで何も表示しない
+  if (!isLoaded) {
+    return <p>Loading user...</p>
   }
 
   return (
@@ -78,7 +77,7 @@ export default function Dashboard() {
       <h1 className="text-2xl font-bold mb-4">Tasks</h1>
 
       {loading ? (
-        <p>Loading...</p>
+        <p>Loading tasks...</p>
       ) : tasks.length > 0 ? (
         <ul className="list-disc list-inside mb-4">
           {tasks.map((task) => (
