@@ -1,59 +1,43 @@
 'use client'
-
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth, useUser, useSession, UserButton } from '@clerk/nextjs'
+import { useSession, useUser } from '@clerk/nextjs'
 import { createClient } from '@supabase/supabase-js'
 
-export const dynamic = 'force-dynamic'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-export default function Dashboard() {
-  const router = useRouter()
-  const { isLoaded, isSignedIn } = useAuth()
+export default function Home() {
+  const [tasks, setTasks] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [name, setName] = useState('')
+  // The `useUser()` hook is used to ensure that Clerk has loaded data about the signed in user
   const { user } = useUser()
+  // The `useSession()` hook is used to get the Clerk session object
+  // The session object is used to get the Clerk session token
   const { session } = useSession()
 
-  const [tasks, setTasks] = useState<any[]>([])
-  const [name, setName] = useState('')
-  const [loading, setLoading] = useState(true)
-
-  // ✅ Clerk公式推奨のSupabaseクライアント
+  // Create a custom Supabase client that injects the Clerk session token into the request headers
   function createClerkSupabaseClient() {
     return createClient(
-      supabaseUrl,
-      supabaseAnonKey,
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_KEY!,
       {
         async accessToken() {
-          return session?.getToken({ template: 'supabase' }) ?? null
+          return session?.getToken() ?? null
         },
-      }
+      },
     )
   }
 
+  // Create a `client` object for accessing Supabase data using the Clerk token
   const client = createClerkSupabaseClient()
 
-  useEffect(() => {
-    if (isLoaded && !isSignedIn) {
-      router.push('/signin')
-    }
-  }, [isLoaded, isSignedIn, router])
-
+  // This `useEffect` will wait for the User object to be loaded before requesting
+  // the tasks for the signed in user
   useEffect(() => {
     if (!user) return
 
     async function loadTasks() {
       setLoading(true)
-      const { data, error } = await client
-        .from('tasks')
-        .select('*')
-        .eq('user_id', user.id)
-
-      if (!error) setTasks(data || [])
-      else console.error('読み込みエラー:', error)
-
+      const { data, error } = await client.from('tasks').select()
+      if (!error) setTasks(data)
       setLoading(false)
     }
 
@@ -62,52 +46,33 @@ export default function Dashboard() {
 
   async function createTask(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-
+    // Insert task into the "tasks" database
     await client.from('tasks').insert({
       name,
-      user_id: user?.id,
     })
-
-    setName('')
     window.location.reload()
   }
 
-  if (!isLoaded) return null
-
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="flex justify-end mb-6">
-        <UserButton afterSignOutUrl="/signin" />
-      </div>
+    <div>
+      <h1>Tasks</h1>
 
-      <h1 className="text-xl font-bold mb-4">タスク一覧</h1>
+      {loading && <p>Loading...</p>}
 
-      {loading ? (
-        <p>読み込み中...</p>
-      ) : tasks.length === 0 ? (
-        <p>タスクはありません</p>
-      ) : (
-        <ul className="list-disc list-inside mb-4">
-          {tasks.map((task) => (
-            <li key={task.id}>{task.name}</li>
-          ))}
-        </ul>
-      )}
+      {!loading && tasks.length > 0 && tasks.map((task: any) => <p key={task.id}>{task.name}</p>)}
 
-      <form onSubmit={createTask} className="flex gap-2">
+      {!loading && tasks.length === 0 && <p>No tasks found</p>}
+
+      <form onSubmit={createTask}>
         <input
+          autoFocus
           type="text"
-          placeholder="新しいタスクを入力"
-          value={name}
+          name="name"
+          placeholder="Enter new task"
           onChange={(e) => setName(e.target.value)}
-          className="border px-2 py-1 rounded w-full"
+          value={name}
         />
-        <button
-          type="submit"
-          className="bg-blue-500 text-white px-4 py-1 rounded"
-        >
-          追加
-        </button>
+        <button type="submit">Add</button>
       </form>
     </div>
   )
