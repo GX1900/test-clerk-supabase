@@ -40,6 +40,7 @@ export default function Home() {
     const { error } = await client.from('tasks').insert({
       name,
       user_id: user?.id,
+      email: user?.primaryEmailAddress?.emailAddress,
     })
 
     if (error) {
