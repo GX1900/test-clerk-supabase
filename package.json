@@ -9,7 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.5", 
+    "@supabase/supabase-js": "^2.39.5",
+    "@supabase/ssr": "^0.3.1", 
     "@clerk/nextjs": "^6.0.0",
     "@hookform/resolvers": "^3.9.0",
     "@next/swc-wasm-nodejs": "^15.0.0",
