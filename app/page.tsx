@@ -38,13 +38,26 @@ export default function Home() {
     loadTasks()
   }, [user])
 
-  async function createTask(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    await client.from('tasks').insert({
-      name,
-    })
-    window.location.reload()
+async function createTask(e: React.FormEvent<HTMLFormElement>) {
+  e.preventDefault();
+
+  console.log("Clerk User ID:", user?.id);
+  const token = await session?.getToken();
+  console.log("Supabase Token:", token);
+
+  const { error } = await client.from('tasks').insert({
+    name,
+    user_id: user?.id,
+  });
+
+  if (error) {
+    console.error("Insert error:", error.message);
+    alert("エラー: " + error.message);
+  } else {
+    alert("タスク作成成功！");
+    window.location.reload();
   }
+}
 
   return (
     <div className="min-h-screen p-4 bg-gray-50">
