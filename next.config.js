@@ -6,7 +6,7 @@ const nextConfig = {
     unoptimized: true,
   },
   experimental: {
-    serverActions: true, // ✅ Clerk v6で必要な設定
+    serverActions: {}, // ✅ Clerk v6で必要な設定
   },
 };
 
