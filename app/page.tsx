@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSession, useUser } from '@clerk/nextjs'
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr' // ✅ 修正ポイント
 
 export default function Home() {
   const [tasks, setTasks] = useState<any[]>([])
@@ -11,15 +11,11 @@ export default function Home() {
   const { user } = useUser()
   const { session } = useSession()
 
+  // ✅ Supabaseクライアントをネイティブ統合用に修正
   function createClerkSupabaseClient() {
-    return createClient(
+    return createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_KEY!,
-      {
-        async accessToken() {
-          return session?.getToken() ?? null
-        },
-      },
+      process.env.NEXT_PUBLIC_SUPABASE_KEY!
     )
   }
 
@@ -38,26 +34,22 @@ export default function Home() {
     loadTasks()
   }, [user])
 
-async function createTask(e: React.FormEvent<HTMLFormElement>) {
-  e.preventDefault();
+  async function createTask(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
 
-  console.log("Clerk User ID:", user?.id);
-  const token = await session?.getToken();
-  console.log("Supabase Token:", token);
+    const { error } = await client.from('tasks').insert({
+      name,
+      user_id: user?.id,
+    })
 
-  const { error } = await client.from('tasks').insert({
-    name,
-    user_id: user?.id,
-  });
-
-  if (error) {
-    console.error("Insert error:", error.message);
-    alert("エラー: " + error.message);
-  } else {
-    alert("タスク作成成功！");
-    window.location.reload();
+    if (error) {
+      console.error("Insert error:", error.message)
+      alert("エラー: " + error.message)
+    } else {
+      alert("タスク作成成功！")
+      window.location.reload()
+    }
   }
-}
 
   return (
     <div className="min-h-screen p-4 bg-gray-50">
