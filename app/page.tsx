@@ -1,40 +1,82 @@
+◆page.tsx 元の内容
+
 'use client'
 
-import { useUser } from '@clerk/nextjs'
-import { useEffect } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { useEffect, useState } from 'react'
+import { useSession, useUser } from '@clerk/nextjs'
+import { createBrowserClient } from '@supabase/ssr' // ✅ 修正ポイント
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_KEY!
-)
+export default function Home() {
+  const [tasks, setTasks] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [name, setName] = useState('')
+  const { user } = useUser()
+  const { session } = useSession()
 
-export default function SaveClerkProfile() {
-  const { user, isSignedIn } = useUser()
+  // ✅ Supabaseクライアントをネイティブ統合用に修正
+  function createClerkSupabaseClient() {
+    return createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_KEY!
+    )
+  }
+
+  const client = createClerkSupabaseClient()
 
   useEffect(() => {
-    if (!isSignedIn || !user) return
+    if (!user) return
 
-    const saveProfileToSupabase = async () => {
-      const { error } = await supabase
-        .from('profile')
-        .upsert(
-          {
-            user_id: user.id,
-            email: user.primaryEmailAddress?.emailAddress,
-          },
-          { onConflict: 'user_id' } // 重複user_idなら更新
-        )
-
-      if (error) {
-        console.error('Profile insert error:', error.message)
-      } else {
-        console.log('✅ Profile saved to Supabase')
-      }
+    async function loadTasks() {
+      setLoading(true)
+      const { data, error } = await client.from('tasks').select()
+      if (!error) setTasks(data)
+      setLoading(false)
     }
 
-    saveProfileToSupabase()
-  }, [isSignedIn, user])
+    loadTasks()
+  }, [user])
 
-  return null // 表示用のUIはなし
+  async function createTask(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+
+    const { error } = await client.from('tasks').insert({
+      name,
+      user_id: user?.id,
+      email: user?.primaryEmailAddress?.emailAddress,
+    })
+
+    if (error) {
+      console.error("Insert error:", error.message)
+      alert("エラー: " + error.message)
+    } else {
+      alert("タスク作成成功！")
+      window.location.reload()
+    }
+  }
+
+  return (
+    <div className="min-h-screen p-4 bg-gray-50">
+      <h1 className="text-2xl font-bold mb-4">Tasks</h1>
+
+      {loading && <p>Loading...</p>}
+      {!loading && tasks.length > 0 &&
+        tasks.map((task: any) => <p key={task.id}>{task.name}</p>)}
+      {!loading && tasks.length === 0 && <p>No tasks found</p>}
+
+      <form onSubmit={createTask} className="mt-4">
+        <input
+          className="border px-2 py-1 mr-2"
+          autoFocus
+          type="text"
+          name="name"
+          placeholder="Enter new task"
+          onChange={(e) => setName(e.target.value)}
+          value={name}
+        />
+        <button type="submit" className="bg-blue-500 text-white px-4 py-1 rounded">
+          Add
+        </button>
+      </form>
+    </div>
+  )
 }
