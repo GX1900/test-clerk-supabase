@@ -1,5 +1,3 @@
-◆page.tsx 元の内容
-
 'use client'
 
 import { useEffect, useState } from 'react'
