@@ -22,26 +22,33 @@ export default function Home() {
 
   // ✅ プロファイル保存処理：ログイン後に1回だけ実行
   useEffect(() => {
-    if (!user) return
+  console.log('🟡 useEffect called')
+  console.log('👤 user:', user)
 
-    const saveProfileToSupabase = async () => {
-      const { error } = await client.from('profiles').upsert(
-        {
-          user_id: user.id,
-          email: user.primaryEmailAddress?.emailAddress,
-        },
-        { onConflict: 'user_id' } // 同じuser_idがあれば更新
-      )
+  if (!user) {
+    console.log('⛔ user is not ready yet')
+    return
+  }
 
-      if (error) {
-        console.error('Profile insert error:', error.message)
-      } else {
-        console.log('✅ Profile saved to Supabase')
-      }
+  const saveProfileToSupabase = async () => {
+    console.log('🚀 Executing upsert...')
+    const { error } = await client.from('profiles').upsert(
+      {
+        user_id: user.id,
+        email: user.primaryEmailAddress?.emailAddress,
+      },
+      { onConflict: 'user_id' }
+    )
+
+    if (error) {
+      console.error('❌ Profile insert error:', error.message)
+    } else {
+      console.log('✅ Profile saved to Supabase')
     }
+  }
 
-    saveProfileToSupabase()
-  }, [user])
+  saveProfileToSupabase()
+}, [user])
 
   useEffect(() => {
     if (!user) return
