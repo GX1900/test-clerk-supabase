@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSession, useUser } from '@clerk/nextjs'
-import { createBrowserClient } from '@supabase/ssr' // ✅ 修正ポイント
+import { createBrowserClient } from '@supabase/ssr'
 
 export default function Home() {
   const [tasks, setTasks] = useState<any[]>([])
@@ -11,7 +11,6 @@ export default function Home() {
   const { user } = useUser()
   const { session } = useSession()
 
-  // ✅ Supabaseクライアントをネイティブ統合用に修正
   function createClerkSupabaseClient() {
     return createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,6 +19,29 @@ export default function Home() {
   }
 
   const client = createClerkSupabaseClient()
+
+  // ✅ プロファイル保存処理：ログイン後に1回だけ実行
+  useEffect(() => {
+    if (!user) return
+
+    const saveProfileToSupabase = async () => {
+      const { error } = await client.from('profiles').upsert(
+        {
+          user_id: user.id,
+          email: user.primaryEmailAddress?.emailAddress,
+        },
+        { onConflict: 'user_id' } // 同じuser_idがあれば更新
+      )
+
+      if (error) {
+        console.error('Profile insert error:', error.message)
+      } else {
+        console.log('✅ Profile saved to Supabase')
+      }
+    }
+
+    saveProfileToSupabase()
+  }, [user])
 
   useEffect(() => {
     if (!user) return
@@ -44,10 +66,10 @@ export default function Home() {
     })
 
     if (error) {
-      console.error("Insert error:", error.message)
-      alert("エラー: " + error.message)
+      console.error('Insert error:', error.message)
+      alert('エラー: ' + error.message)
     } else {
-      alert("タスク作成成功！")
+      alert('タスク作成成功！')
       window.location.reload()
     }
   }
